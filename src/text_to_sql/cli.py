@@ -31,7 +31,7 @@ def table(result: guard.Result) -> str:
 
 
 def show(a: Answer) -> int:
-    if a.sql:
+    if a.question and a.sql:  # typed SQL needs no echo and has no confidence
         print(f"SQL (confidence {a.confidence:.0%}):\n  {a.sql}")
     for x in a.assumptions:
         print(f"  assumes: {x}")
