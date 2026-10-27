@@ -1,0 +1,26 @@
+[project]
+name = "text-to-sql"
+version = "0.1.0"
+description = "Ask a shop database questions in plain English: Claude writes the SQL, guardrails block anything that is not one read-only SELECT before it runs on a read-only SQLite replica."
+requires-python = ">=3.10"
+dependencies = ["pydantic>=2", "anthropic>=0.80", "sqlglot>=27"]
+
+[project.optional-dependencies]
+demo = ["streamlit>=1.50"]
+dev = ["pytest", "streamlit>=1.50"]
+
+[project.scripts]
+text-to-sql = "text_to_sql.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+text_to_sql = ["shop.sqlite"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "evals"]
