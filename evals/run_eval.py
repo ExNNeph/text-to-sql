@@ -23,20 +23,29 @@ CASES = json.loads((HERE / "questions.json").read_text(encoding="utf-8"))
 PRICE_IN, PRICE_OUT = 4.00, 20.00  # $ per million tokens, claude-opus-5-5
 
 
-def _norm(v):
-    return round(float(v), 2) if isinstance(v, (int, float)) and not isinstance(v, bool) else v
+def _same(a, b) -> bool:
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (a, b)):
+        return abs(a - b) < 0.011  # 12.825 rounds to 12.82 or 12.83 depending on the SQLite version
+    return a == b
+
+
+def _row(a: tuple, b: tuple) -> bool:
+    return all(_same(x, y) for x, y in zip(a, b))
 
 
 def matches(rows: list, expected: list, ordered: bool) -> bool:
     """True if some choice of the result's columns gives exactly the expected rows. Extra columns are fine
-    (an id next to a name), numbers are compared at 2 decimals, and unordered results as sets."""
+    (an id next to a name), numbers may differ by rounding at 2 decimals, and unordered results compare as sets."""
     if not expected or not rows:
         return not expected and not rows
     k, width = len(expected[0]), len(rows[0])
-    want = [tuple(_norm(v) for v in r) for r in expected]
+    want = [tuple(r) for r in expected]
     for cols in permutations(range(width), k):
-        got = [tuple(_norm(r[c]) for c in cols) for r in rows]
-        if (got == want) if ordered else (set(got) == set(want) and len(got) >= len(want)):
+        got = [tuple(r[c] for c in cols) for r in rows]
+        if ordered:
+            if len(got) == len(want) and all(map(_row, got, want)):
+                return True
+        elif all(any(_row(g, w) for g in got) for w in want) and all(any(_row(g, w) for w in want) for g in got):
             return True
     return False
 
