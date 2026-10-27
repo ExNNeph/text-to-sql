@@ -49,7 +49,7 @@ with st.sidebar:
 
 
 def show_result(r: guard.Result) -> None:
-    st.dataframe(pd.DataFrame(r.rows, columns=r.columns), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(r.rows, columns=r.columns), hide_index=True, width="stretch")
     st.caption(f"{len(r.rows)} rows{' (limit reached)' if r.truncated else ''} · {r.ms} ms · read-only")
 
 
