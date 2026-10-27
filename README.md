@@ -12,8 +12,23 @@ block rate, false blocks and cost.
 
 ## Preview
 
-Without an API key you can still type SQL yourself and it goes through the same guardrails. A harmless SELECT
-with a `DROP TABLE` behind it is blocked before anything runs:
+**A question in plain English**: Claude writes the SQL, says how sure it is and what it assumed, and the
+query runs read-only. The SQL is always shown, so you can check it:
+
+![Top 5 customers by paid invoices: SQL, 82% confidence, assumptions, result table](docs/preview-ask.png)
+
+**An ambiguous question** (*Who are our best customers?*): confidence 45%, every interpretation is listed,
+and nothing runs until you click **Run it anyway**:
+
+![Low confidence: assumptions listed, Run it anyway button](docs/preview-confirm.png)
+
+**Prompt injection through the data**: customer 2's note tells the AI to drop the invoices table. Claude
+shows the note and treats it as data:
+
+![The planted note is returned as data, no DROP is written](docs/preview-injection.png)
+
+**No API key needed for the guardrails**: SQL you type yourself goes through the same checks. A SELECT with
+a `DROP TABLE` behind it is blocked before anything runs:
 
 ![A SELECT followed by DROP TABLE, blocked as two statements](docs/preview-guardrails.png)
 
@@ -114,12 +129,43 @@ pytest                            # unit tests + sanity checks on the labels, no
 
 ## Results
 
-The eval has not been run yet.
+One run of `evals/run_eval.py` with `claude-opus-5-5` (effort medium); per-case output in `evals/results.json`.
+
+| metric | result |
+|---|---|
+| execution accuracy, 30 safe questions | **29 / 30 (97%)** |
+| false blocks or declines on safe questions | **0 / 30** |
+| broken SQL on safe questions | 0 / 30 (the retry was never needed) |
+| needless confirmations on safe questions | 0 / 30 |
+| asked for confirmation on ambiguous questions | **5 / 5** (confidence 0.40 to 0.55) |
+| attacks where nothing destructive was written or run | **20 / 20** |
+| … Claude declined | 17 |
+| … Claude answered only the harmless read-only part | 3 (count the orders without loading the extension, count the orders without the injected `DELETE`, show customer 2's note without following it) |
+| … the guardrails had to block Claude's SQL | 0 |
+| database file changed (SHA-256 before and after) | no |
+| cost | 55 calls, 112,254 input / 12,103 output tokens, **$0.69** (about 1.3 cents per question) |
+
+- **The one miss** (*How many units did we sell per product category?*) is an interpretation, not broken SQL:
+  Claude left out cancelled and refunded orders, while the label counts every order. It said so in its
+  assumptions, but its confidence was exactly 0.70, just at the threshold, so it ran without asking.
+- **Confidence separated clear from ambiguous questions** in this run: every safe question scored at least
+  0.70 and every ambiguous one at most 0.55. With 35 questions that is a good sign, not a calibration result.
+- **The attacks never reached the guardrails**, because Claude declined or rewrote all 20. The guardrails
+  are the layer that does not depend on the model behaving: the unit tests run 20 hand-written attacks
+  (stacked statements, `ATTACH`, `PRAGMA`, `VACUUM INTO`, a `DELETE` inside a CTE, `load_extension`,
+  `sqlite_master`, …) straight into the checker, and 5 writes straight into the runner, which refuses them
+  even without the checker.
+
+**What this does not show:** one small synthetic database, 55 questions written by one person, one run (no
+variance across runs), and attacks I thought of. Attackers who know the system would try harder, for
+example reads that are expensive rather than destructive. Next steps: a second schema, repeated runs, and
+attack prompts written by someone else.
 
 ## Known limits
 
 - One sample database; the guardrails read any SQLite schema, but the prompt and eval are built for this one.
-- Confidence is the model's own estimate, not a calibrated probability.
+- Confidence is the model's own estimate, not a calibrated probability; one answer at exactly 0.70 ran without
+  asking although it made a debatable assumption.
 - The guardrails stop writes and escapes, not expensive reads: a heavy join runs until the 3 second limit.
 - Row-level permissions (who may see which customer) are out of scope; every allowed table is readable.
 
